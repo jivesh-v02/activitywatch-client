@@ -1,0 +1,51 @@
+[tool.poetry]
+name = "aw-core"
+version = "0.5.17"
+description = "Core library for ActivityWatch"
+authors = ["Erik Bjäreholt <erik@bjareho.lt>", "Johan Bjäreholt <johan@bjareho.lt>"]
+license = "MPL-2.0"
+readme = "README.md"
+homepage = "https://activitywatch.net/"
+repository = "https://github.com/ActivityWatch/aw-core/"
+documentation = "https://docs.activitywatch.net/"
+packages = [
+    { include = "aw_core" },
+    { include = "aw_datastore" },
+    { include = "aw_transform" },
+    { include = "aw_query" },
+]
+
+[tool.poetry.scripts]
+aw-cli = "aw_cli.__main__:main"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+jsonschema = "^4.3"
+peewee = "3.*"
+platformdirs = "3.10"  # pinned due to sometimes breaking changes in minor versions: https://github.com/ActivityWatch/aw-core/pull/122#issuecomment-1768020335
+iso8601 = "*"
+rfc3339-validator = "^0.1.4"  # needed for the date-type format in jsonschema
+strict-rfc3339 = "^0.7"
+tomlkit = "*"
+deprecation = "*"
+timeslot = "*"
+
+[tool.poetry.group.dev.dependencies]
+mypy = "*"
+ruff = "*"
+pytest = "*"
+pytest-cov = "*"
+
+[tool.ruff]
+target-version = "py38"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "B", "UP"]
+ignore = ["E402", "E501", "B905"]
+
+[tool.lint.ruff]
+ignore = ["E402", "E501"]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
