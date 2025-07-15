@@ -108,8 +108,20 @@ class AFKWatcher:
             self.client.create_bucket(self.bucketname, eventtype)
         except Exception as e:
             import requests
-            if isinstance(e, requests.exceptions.HTTPError) and e.response is not None and e.response.status_code in (400, 304):
-                logger.info(f"Bucket already exists: {self.bucketname}, continuing to send heartbeats.")
+            if isinstance(e, requests.exceptions.HTTPError) and e.response is not None:
+                status = e.response.status_code
+                msg = e.response.text
+                if status in (409, 304):  # 409: Conflict (already exists), 304: Not Modified
+                    logger.info(f"Bucket already exists: {self.bucketname}, continuing to send heartbeats.")
+                elif status == 400:
+                    if "schema" in msg.lower():
+                        logger.error(f"Bucket schema mismatch for {self.bucketname}: {msg}\nPlease delete the bucket on the server and restart the watcher.")
+                    else:
+                        logger.error(f"Bad request when creating bucket {self.bucketname}: {msg}")
+                    raise
+                else:
+                    logger.error(f"Failed to create bucket: {e} (status {status})")
+                    raise
             else:
                 logger.error(f"Failed to create bucket: {e}")
                 raise
