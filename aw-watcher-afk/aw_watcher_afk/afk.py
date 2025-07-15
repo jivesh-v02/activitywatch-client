@@ -104,7 +104,15 @@ class AFKWatcher:
         self.client.wait_for_start()
 
         eventtype = "afkstatus"
-        self.client.create_bucket(self.bucketname, eventtype, queued=True)
+        try:
+            self.client.create_bucket(self.bucketname, eventtype)
+        except Exception as e:
+            import requests
+            if isinstance(e, requests.exceptions.HTTPError) and e.response is not None and e.response.status_code in (400, 304):
+                logger.info(f"Bucket already exists: {self.bucketname}, continuing to send heartbeats.")
+            else:
+                logger.error(f"Failed to create bucket: {e}")
+                raise
 
         # Start afk checking loop
         with self.client:
