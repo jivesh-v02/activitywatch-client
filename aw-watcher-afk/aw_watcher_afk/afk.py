@@ -111,7 +111,7 @@ class AFKWatcher:
             if isinstance(e, requests.exceptions.HTTPError) and e.response is not None:
                 status = e.response.status_code
                 msg = e.response.text
-                if status in (409, 304):  # 409: Conflict (already exists), 304: Not Modified
+                if status in (409, 304) or (status == 400 and "already exists" in msg.lower()):
                     logger.info(f"Bucket already exists: {self.bucketname}, continuing to send heartbeats.")
                 elif status == 400:
                     if "schema" in msg.lower():

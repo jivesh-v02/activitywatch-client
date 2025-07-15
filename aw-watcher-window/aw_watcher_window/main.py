@@ -18,6 +18,8 @@ from .exceptions import FatalError
 from .lib import get_current_window
 from .macos_permissions import background_ensure_permissions
 
+import requests
+
 logger = logging.getLogger(__name__)
 
 # run with LOG_LEVEL=DEBUG
@@ -114,7 +116,7 @@ def main():
         if isinstance(e, requests.exceptions.HTTPError) and e.response is not None:
             status = e.response.status_code
             msg = e.response.text
-            if status in (409, 304):  # 409: Conflict (already exists), 304: Not Modified
+            if status in (409, 304) or (status == 400 and "already exists" in msg.lower()):
                 logger.info(f"Bucket already exists: {bucket_id}, continuing to send heartbeats.")
             elif status == 400:
                 if "schema" in msg.lower():
@@ -192,12 +194,6 @@ def heartbeat_loop(
         except Exception:
             # Non-fatal exceptions should be logged
             try:
-                # If stdout has been closed, this exception-print can cause (I think)
-                #   OSError: [Errno 5] Input/output error
-                # See: https://github.com/ActivityWatch/activitywatch/issues/756#issue-1296352264
-                #
-                # However, I'm unable to reproduce the OSError in a test (where I close stdout before logging),
-                # so I'm in uncharted waters here... but this solution should work.
                 logger.exception("Exception thrown while trying to get active window")
             except OSError:
                 break
@@ -215,11 +211,24 @@ def heartbeat_loop(
             now = datetime.now(timezone.utc)
             current_window_event = Event(timestamp=now, data=current_window)
 
-            # Set pulsetime to 1 second more than the poll_time
-            # This since the loop takes more time than poll_time
-            # due to sleep(poll_time).
-            client.heartbeat(
-                bucket_id, current_window_event, pulsetime=poll_time + 1.0, queued=True
-            )
+            event_json = current_window_event.to_json_dict()
+            # Remove 'id' if None
+            if event_json.get('id') is None:
+                event_json.pop('id')
+            logger.info(f"Sending heartbeat event (json): {event_json}")
+
+            # Fix: client.server_address may already include http://
+            base_url = client.server_address
+            if not base_url.startswith("http://") and not base_url.startswith("https://"):
+                base_url = f"http://{base_url}"
+            url = f"{base_url}/api/0/buckets/{bucket_id}/heartbeat?pulsetime={poll_time + 1.0}"
+            try:
+                resp = requests.post(url, json=event_json, headers={"Content-Type": "application/json"})
+                if resp.status_code >= 400:
+                    logger.error(f"Raw heartbeat failed: {resp.status_code} {resp.reason} - {resp.text}")
+                else:
+                    logger.info(f"Raw heartbeat success: {resp.status_code} {resp.reason}")
+            except Exception as e:
+                logger.error(f"Raw heartbeat exception: {e}")
 
         sleep(poll_time)
