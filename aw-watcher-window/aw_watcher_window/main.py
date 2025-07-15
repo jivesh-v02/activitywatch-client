@@ -107,7 +107,27 @@ def main():
     bucket_id = f"{client.client_name}_{unique_id}"
     event_type = "currentwindow"
 
-    client.create_bucket(bucket_id, event_type, queued=True)
+    try:
+        client.create_bucket(bucket_id, event_type, queued=True)
+    except Exception as e:
+        import requests
+        if isinstance(e, requests.exceptions.HTTPError) and e.response is not None:
+            status = e.response.status_code
+            msg = e.response.text
+            if status in (409, 304):  # 409: Conflict (already exists), 304: Not Modified
+                logger.info(f"Bucket already exists: {bucket_id}, continuing to send heartbeats.")
+            elif status == 400:
+                if "schema" in msg.lower():
+                    logger.error(f"Bucket schema mismatch for {bucket_id}: {msg}\nPlease delete the bucket on the server and restart the watcher.")
+                else:
+                    logger.error(f"Bad request when creating bucket {bucket_id}: {msg}")
+                raise
+            else:
+                logger.error(f"Failed to create bucket: {e} (status {status})")
+                raise
+        else:
+            logger.error(f"Failed to create bucket: {e}")
+            raise
 
     logger.info("aw-watcher-window started")
     client.wait_for_start()
